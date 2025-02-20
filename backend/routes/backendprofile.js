@@ -154,7 +154,7 @@ router.post('/upload-image', (req, res) => {
             }
 
             let Model = getModel(role);
-            const relativePath = "http://locathost:5000/"+path.relative(path.join(__dirname, '..'), req.file.path)
+            const relativePath = "http://localhost:5000/"+path.relative(path.join(__dirname, '..'), req.file.path)
                 .replace(/\\/g, '/');
 
             // Update user profile with new image path

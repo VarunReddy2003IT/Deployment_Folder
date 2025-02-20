@@ -33,7 +33,7 @@ h3 {
 
 /* Form inputs and selects */
 input, select {
-  width: fit-content;
+  width: 100%;
   min-width: 130px;
   padding: 12px;
   margin-bottom: 15px;
