@@ -78,38 +78,23 @@ const Profile = () => {
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('upload_preset', 'ml_default');
+    formData.append('email', email);
+    formData.append('role', role);
 
     try {
-      const cloudinaryResponse = await fetch('https://api.cloudinary.com/v1_1/dc2qstjvr/image/upload', {
+      const uploadResponse = await fetch('http://localhost:5000/api/profile/upload-image', {
         method: 'POST',
         body: formData,
       });
 
-      const cloudinaryData = await cloudinaryResponse.json();
-      if (!cloudinaryData.secure_url) {
-        throw new Error('Failed to upload image to Cloudinary');
+      const uploadResult = await uploadResponse.json();
+
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.message || 'Failed to upload image');
       }
 
-      const updateResponse = await fetch('http://localhost:5000/api/profile/update-profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          role,
-          imageUrl: cloudinaryData.secure_url,
-        }),
-      });
-
-      const updateResult = await updateResponse.json();
-
-      if (!updateResult.success) {
-        throw new Error(updateResult.message || 'Failed to update profile');
-      }
-
-      setUserData((prev) => ({ ...prev, imageUrl: cloudinaryData.secure_url }));
+      // Update user data with the new image path
+      setUserData((prev) => ({ ...prev, imageUrl: uploadResult.imagePath }));
       showNotification('Profile image updated successfully');
     } catch (err) {
       showNotification(err.message || 'Error uploading image', 'error');
@@ -358,7 +343,7 @@ const Profile = () => {
               value={selectedClub}
               onChange={(e) => setSelectedClub(e.target.value)}
               className="club-select"
-              style={{ width: "250px", padding: "8px", fontSize: "16px" }}
+              style={{ width: "50px", padding: "8px", fontSize: "16px" }}
             >
               <option value="">Select a club</option>
               {clubs

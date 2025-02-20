@@ -36,7 +36,7 @@ h3 {
 
 /* Form inputs and selects */
 input, select {
-  width: 100%;
+  width: fit-content;
   padding: 12px;
   margin-bottom: 15px;
   border: 2px solid #e9ecef;

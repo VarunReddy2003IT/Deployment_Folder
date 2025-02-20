@@ -1,21 +1,28 @@
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./utils/dbconnection');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 require('dotenv').config();
-// Enhanced CORS configuration with logging
+
+// Enhanced CORS configuration
 app.use(cors({
     origin: '*', // Allow all origins
-    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allow specific methods
-    allowedHeaders: ['Content-Type', 'Authorization'], // Optional: Allow specific headers
-    credentials: true // Allow cookies or credentials (if necessary)
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed methods
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true // Allow credentials if necessary
 }));
 
 app.use(express.json());
 
-// Connect to the database
+// ✅ Serve static files from 'uploads' directory
+const uploadsPath = path.join(__dirname, 'uploads'); // Ensure correct path
+app.use('/uploads', express.static(uploadsPath));
+console.log(`Uploads folder served from: ${uploadsPath}`);
+
+// Database connection
 connectDB();
 
 // Error handling for database connection
@@ -25,6 +32,12 @@ app.use((err, req, res, next) => {
         success: false,
         message: 'Database connection error'
     });
+});
+
+// ✅ Log requests to help debug file access issues
+app.use((req, res, next) => {
+    console.log(`Request: ${req.method} ${req.url}`);
+    next();
 });
 
 // Routes
@@ -48,5 +61,6 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📂 Serving static files from: http://localhost:${PORT}/uploads/`);
 });
