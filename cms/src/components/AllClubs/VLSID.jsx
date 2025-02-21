@@ -55,23 +55,15 @@ function VLSID() {
     setError('');
 
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', 'ml_default');
+    formData.append('poster', file);
 
     try {
-      const cloudinaryResponse = await fetch('https://api.cloudinary.com/v1_1/dc2qstjvr/image/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const cloudinaryData = await cloudinaryResponse.json();
-      if (!cloudinaryData.secure_url) {
-        throw new Error('Failed to upload image to Cloudinary');
-      }
-
-      setImageUrl(cloudinaryData.secure_url);
+      // Note: We're not making a complete event submission here
+      // Instead, we'll just preview the image locally
+      const imageUrl = URL.createObjectURL(file);
+      setImageUrl(imageUrl);
     } catch (err) {
-      setError('Error uploading image: ' + err.message);
+      setError('Error handling image: ' + err.message);
     } finally {
       setUploading(false);
     }
@@ -84,24 +76,12 @@ function VLSID() {
     setUploading(true);
     setError('');
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', 'ml_default');
-
     try {
-      const cloudinaryResponse = await fetch('https://api.cloudinary.com/v1_1/dc2qstjvr/image/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const cloudinaryData = await cloudinaryResponse.json();
-      if (!cloudinaryData.secure_url) {
-        throw new Error('Failed to upload QR code');
-      }
-
-      setQrImageUrl(cloudinaryData.secure_url);
+      // Similarly, just preview the QR code locally
+      const qrUrl = URL.createObjectURL(file);
+      setQrImageUrl(qrUrl);
     } catch (err) {
-      setError('Error uploading QR code: ' + err.message);
+      setError('Error handling QR code: ' + err.message);
     } finally {
       setUploading(false);
     }
@@ -115,23 +95,13 @@ function VLSID() {
     setError('');
 
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', 'ml_default');
+    formData.append('document', file);
 
     try {
-      const cloudinaryResponse = await fetch('https://api.cloudinary.com/v1_1/dc2qstjvr/image/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const cloudinaryData = await cloudinaryResponse.json();
-      if (!cloudinaryData.secure_url) {
-        throw new Error('Failed to upload document');
-      }
-
-      // Update the event with the document URL
-      await axios.post(`http://localhost:5000/api/events/upload-document/${eventId}`, {
-        documentUrl: cloudinaryData.secure_url
+      const response = await axios.post(`http://localhost:5000/api/events/upload-document/${eventId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       });
 
       alert("Document uploaded successfully!");
@@ -157,30 +127,46 @@ function VLSID() {
       return;
     }
 
+    const formData = new FormData();
+    formData.append('eventname', eventName);
+    formData.append('clubtype', "Technical");
+    formData.append('club', "VLSID");
+    formData.append('date', eventDate);
+    formData.append('description', eventDescription);
+    formData.append('paymentRequired', paymentRequired);
+    
+    // Get the files from the preview URLs
+    if (imageUrl) {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      formData.append('poster', blob, 'event-poster.jpg');
+    }
+    
+    if (paymentRequired && qrImageUrl) {
+      const response = await fetch(qrImageUrl);
+      const blob = await response.blob();
+      formData.append('paymentQR', blob, 'payment-qr.jpg');
+    }
+
     try {
-      await axios.post("http://localhost:5000/api/events/add", {
-        eventname: eventName,
-        clubtype: "Technical",
-        club: "VLSID",
-        date: eventDate,
-        description: eventDescription,
-        type: isUpcoming ? 'upcoming' : 'past',
-        image: imageUrl,
-        paymentRequired,
-        paymentQR: paymentRequired ? qrImageUrl : undefined,
-        registeredEmails: []
+      const response = await axios.post("http://localhost:5000/api/events/add", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       });
 
-      alert("Event added successfully!");
-      setEventName('');
-      setEventDate('');
-      setEventDescription('');
-      setPaymentRequired(false);
-      setQrImageUrl('');
-      setImageUrl('');
-      setShowAddEventForm(false);
-      setError('');
-      fetchEvents();
+      if (response.data) {
+        alert("Event added successfully!");
+        setEventName('');
+        setEventDate('');
+        setEventDescription('');
+        setPaymentRequired(false);
+        setQrImageUrl('');
+        setImageUrl('');
+        setShowAddEventForm(false);
+        setError('');
+        fetchEvents();
+      }
     } catch (error) {
       setError(error.response?.data?.error || "Failed to add event. Please try again.");
     }
