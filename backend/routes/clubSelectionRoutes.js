@@ -14,6 +14,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+
 // Store pending approvals in memory (consider using Redis in production)
 const pendingApprovals = new Map();
 
