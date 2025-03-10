@@ -8,7 +8,7 @@ const Admin = require('../models/admin');
 const Lead = require('../models/lead');
 const Member = require('../models/member');
 
-// Store OTPs temporarily (in production, use Redis or similar)
+// Store OTPs temporarily (consider using Redis or similar for production)
 const otpStore = new Map();
 
 // Configure multer for file storage
@@ -20,9 +20,9 @@ const storage = multer.diskStorage({
             fs.mkdirSync(uploadDir, { recursive: true });
         }
         
-        // Use multer's req.body which will be populated after the form is parsed
-        const email = req.body.email || 'default';
-        const userDir = path.join(uploadDir, email.replace('@', '_at_'));
+        // Use multer's req.body after form parsing
+        const email = req.body.email ? req.body.email.replace('@', '_at_') : 'default';
+        const userDir = path.join(uploadDir, email);
         if (!fs.existsSync(userDir)) {
             fs.mkdirSync(userDir, { recursive: true });
         }
@@ -35,36 +35,33 @@ const storage = multer.diskStorage({
     }
 });
 
-const fileFilter = (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-
-    if (extname && mimetype) {
-        cb(null, true);
-    } else {
-        cb(new Error('Only image files are allowed!'));
-    }
-};
-
 const upload = multer({
     storage: storage,
     limits: {
         fileSize: 5 * 1024 * 1024 // 5MB limit
     },
-    fileFilter: fileFilter
-}).single('file');
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif/;
+        const isValid = allowedTypes.test(path.extname(file.originalname).toLowerCase()) && allowedTypes.test(file.mimetype);
+
+        if (isValid) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed!'));
+        }
+    }
+});
 
 // Configure nodemailer
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'varunreddy2new@gmail.com',
-        pass: 'bmly geoo gwkg jasu',
+         user: 'gvpclubconnect@gmail.com',
+        pass: 'dajl xekp dkda glda', // Ideally store in environment variables
     }
 });
 
-// Helper function to get the appropriate model
+// Helper function to get the appropriate model based on role
 const getModel = (role) => {
     switch (role.toLowerCase()) {
         case 'admin':
@@ -74,276 +71,183 @@ const getModel = (role) => {
         case 'member':
             return Member;
         default:
-            throw new Error('Invalid role');
+            throw new Error('Invalid role provided');
     }
 };
 
-// Get profile route
+// Get user profile route
 router.get('/', async (req, res) => {
+    const { email, role } = req.query;
+
+    if (!email || !role) {
+        return res.status(400).json({ success: false, message: 'Email and role are required.' });
+    }
+
     try {
-        const { email, role } = req.query;
-
-        if (!email || !role) {
-            console.log('Missing required fields:', { email, role });
-            return res.status(400).json({
-                success: false,
-                message: 'Email and role are required'
-            });
-        }
-
-        let Model = getModel(role);
-
-        const userData = await Model.findOne(
-            { email: email.toLowerCase() },
-            { name: 1, email: 1, imageUrl: 1, club: 1, _id: 0 }
-        );
+        const Model = getModel(role);
+        const userData = await Model.findOne({ email: email.toLowerCase() }, { name: 1, email: 1, imageUrl: 1, location: 1 });
 
         if (!userData) {
-            console.log('User not found:', { email, role });
-            return res.status(404).json({
-                success: false,
-                message: `User not found in ${role} database`
-            });
+            return res.status(404).json({ success: false, message: `User not found in ${role} database.` });
         }
 
-        console.log('User found:', userData);
-        res.status(200).json({
-            success: true,
-            data: userData
-        });
-
+        res.status(200).json({ success: true, data: userData });
     } catch (error) {
         console.error('Profile route error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error retrieving user profile'
-        });
+        res.status(500).json({ success: false, message: 'Error retrieving user profile.' });
     }
 });
 
 // Upload image route
-router.post('/upload-image', (req, res) => {
-    upload(req, res, async function(err) {
-        if (err instanceof multer.MulterError) {
-            return res.status(400).json({
-                success: false,
-                message: 'File upload error: ' + err.message
-            });
-        } else if (err) {
-            return res.status(500).json({
-                success: false,
-                message: 'Error uploading file: ' + err.message
-            });
+router.post('/upload-image', upload.single('file'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded.' });
+    }
+
+    const { email, role } = req.body;
+
+    if (!email || !role) {
+        fs.unlinkSync(req.file.path); // Remove uploaded file
+        return res.status(400).json({ success: false, message: 'Email and role are required.' });
+    }
+
+    try {
+        const Model = getModel(role);
+        const relativePath = 'http://localhost:5000/uploads/default/'+req.file.filename;
+
+        // Update user profile with new image path
+        const updatedUser = await Model.findOneAndUpdate(
+            { email: email.toLowerCase() },
+            { imageUrl: relativePath },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            fs.unlinkSync(req.file.path); // Clean up if user is not found
+            return res.status(404).json({ success: false, message: 'User not found.' });
         }
+
+        res.json({ success: true, message: 'File uploaded successfully.', imagePath: relativePath });
+    } catch (error) {
+        if (req.file) {
+            fs.unlinkSync(req.file.path); // Clean up if file upload fails
+        }
+        console.error('File upload error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Update profile route
+router.post('/update-profile', async (req, res) => {
+    const { email, role, imageUrl, name, location } = req.body;
+    console.log(location);
+    if (!email || !role) {
+        return res.status(400).json({ success: false, message: 'Email and role are required.' });
+    }
+
+    try {
+        const Model = getModel(role);
+        const updateFields = {};
         
-        try {
-            if (!req.file) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'No file uploaded'
-                });
-            }
+        if (imageUrl) updateFields.imageUrl = imageUrl;
+        if (name) updateFields.name = name;
+        if (typeof location !== 'undefined') updateFields.location = location;
 
-            const { email, role } = req.body;
-            if (!email || !role) {
-                fs.unlinkSync(req.file.path);
-                return res.status(400).json({
-                    success: false,
-                    message: 'Email and role are required'
-                });
-            }
+        const updatedUser = await Model.findOneAndUpdate(
+            { email: email.toLowerCase() },
+            { $set: updateFields },
+            { new: true }
+        );
 
-            let Model = getModel(role);
-            const relativePath = "http://localhost:5000/"+path.relative(path.join(__dirname, '..'), req.file.path)
-                .replace(/\\/g, '/');
-
-            // Update user profile with new image path
-            const updatedUser = await Model.findOneAndUpdate(
-                { email: email.toLowerCase() },
-                { $set: { imageUrl: relativePath } },
-                { new: true }
-            );
-
-            if (!updatedUser) {
-                fs.unlinkSync(req.file.path);
-                return res.status(404).json({
-                    success: false,
-                    message: `User not found in ${role} database`
-                });
-            }
-
-            res.json({
-                success: true,
-                message: 'File uploaded successfully',
-                imagePath: relativePath
-            });
-
-        } catch (error) {
-            if (req.file) {
-                fs.unlinkSync(req.file.path);
-            }
-            console.error('Upload error:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message || 'Error uploading file'
-            });
+        if (!updatedUser) {
+            return res.status(404).json({ success: false, message: `User not found in ${role} database.` });
         }
-    });
+        console.log("updated");
+        res.status(200).json({ success: true, data: updatedUser });
+    } catch (error) {
+        console.error('Profile update error:', error);
+        res.status(500).json({ success: false, message: 'Error updating user profile.' });
+    }
 });
 
 // Generate OTP
-const generateOTP = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-};
+const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 // Request delete OTP route
 router.post('/request-delete-otp', async (req, res) => {
+    const { email, role } = req.body;
+
+    if (!email || !role) {
+        return res.status(400).json({ success: false, message: 'Email and role are required.' });
+    }
+
     try {
-        const { email, role } = req.body;
-
-        if (!email || !role) {
-            console.log('Missing required fields:', { email, role });
-            return res.status(400).json({
-                success: false,
-                message: 'Email and role are required'
-            });
-        }
-
-        let Model = getModel(role);
-
+        const Model = getModel(role);
         const user = await Model.findOne({ email: email.toLowerCase() });
+
         if (!user) {
-            console.log('User not found:', { email, role });
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
+            return res.status(404).json({ success: false, message: 'User not found.' });
         }
 
         const otp = generateOTP();
-        otpStore.set(email, {
-            otp,
-            timestamp: Date.now(),
-            attempts: 0
-        });
+        otpStore.set(email, { otp, timestamp: Date.now(), attempts: 0 });
 
         const mailOptions = {
             from: process.env.EMAIL_USER,
             to: email,
             subject: 'Account Deletion OTP',
-            text: `Your OTP for account deletion is: ${otp}\nThis OTP will expire in 5 minutes.\nIf you did not request this, please ignore this email.`
+            text: `Your OTP for account deletion is: ${otp}\nIt will expire in 5 minutes.`,
         };
 
         await transporter.sendMail(mailOptions);
-        console.log('OTP sent successfully to:', email);
-
-        res.status(200).json({
-            success: true,
-            message: 'OTP sent successfully'
-        });
-
+        res.status(200).json({ success: true, message: 'OTP sent successfully.' });
     } catch (error) {
         console.error('OTP request error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error sending OTP'
-        });
+        res.status(500).json({ success: false, message: 'Error sending OTP.' });
     }
 });
 
 // Delete account route
 router.post('/delete-account', async (req, res) => {
-    try {
-        const { email, role, otp } = req.body;
+    const { email, role, otp } = req.body;
 
-        if (!email || !role || !otp) {
-            console.log('Missing required fields:', { email, role, otp });
-            return res.status(400).json({
-                success: false,
-                message: 'Email, role, and OTP are required'
-            });
-        }
+    if (!email || !role || !otp) {
+        return res.status(400).json({ success: false, message: 'Email, role, and OTP are required.' });
+    }
 
-        const storedOTPData = otpStore.get(email);
-        if (!storedOTPData) {
-            console.log('OTP not found or expired:', email);
-            return res.status(400).json({
-                success: false,
-                message: 'OTP expired or not requested'
-            });
-        }
+    const storedOTPData = otpStore.get(email);
+    if (!storedOTPData) {
+        return res.status(400).json({ success: false, message: 'OTP expired or not requested.' });
+    }
 
-        if (Date.now() - storedOTPData.timestamp > 5 * 60 * 1000) {
-            console.log('OTP expired:', email);
+    if (Date.now() - storedOTPData.timestamp > 5 * 60 * 1000) {
+        otpStore.delete(email);
+        return res.status(400).json({ success: false, message: 'OTP expired.' });
+    }
+
+    if (storedOTPData.otp !== otp) {
+        storedOTPData.attempts += 1;
+        if (storedOTPData.attempts >= 3) {
             otpStore.delete(email);
-            return res.status(400).json({
-                success: false,
-                message: 'OTP expired'
-            });
+            return res.status(400).json({ success: false, message: 'Too many failed attempts. Request a new OTP.' });
         }
+        return res.status(400).json({ success: false, message: 'Invalid OTP.' });
+    }
 
-        if (storedOTPData.otp !== otp) {
-            storedOTPData.attempts += 1;
-            console.log('Invalid OTP attempt:', { email, attempts: storedOTPData.attempts });
-            
-            if (storedOTPData.attempts >= 3) {
-                otpStore.delete(email);
-                return res.status(400).json({
-                    success: false,
-                    message: 'Too many failed attempts. Please request a new OTP'
-                });
-            }
-            
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid OTP'
-            });
-        }
-
-        let Model = getModel(role);
-
-        // Find user to get image path before deletion
-        const user = await Model.findOne({ email: email.toLowerCase() });
-        if (user && user.imageUrl) {
-            const imagePath = path.join(__dirname, '..', user.imageUrl);
-            // Delete user's image file if it exists
-            if (fs.existsSync(imagePath)) {
-                fs.unlinkSync(imagePath);
-            }
-            // Remove user's upload directory
-            const userDir = path.dirname(imagePath);
-            if (fs.existsSync(userDir)) {
-                fs.rmdirSync(userDir, { recursive: true });
-            }
-        }
-
+    try {
+        const Model = getModel(role);
         const result = await Model.deleteOne({ email: email.toLowerCase() });
-        
+
         if (result.deletedCount === 0) {
-            console.log('User not found for deletion:', { email, role });
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
+            return res.status(404).json({ success: false, message: 'User not found.' });
         }
 
         otpStore.delete(email);
-        console.log('Account deleted successfully:', { email, role });
-
-        res.status(200).json({
-            success: true,
-            message: 'Account deleted successfully'
-        });
-
+        res.status(200).json({ success: true, message: 'Account deleted successfully.' });
     } catch (error) {
         console.error('Account deletion error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error deleting account'
-        });
+        res.status(500).json({ success: false, message: 'Error deleting account.' });
     }
 });
-
-// Serve uploaded files statically
 
 module.exports = router;

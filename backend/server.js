@@ -20,7 +20,6 @@ app.use(express.json());
 // ✅ Serve static files from 'uploads' directory
 const uploadsPath = path.join(__dirname, 'uploads'); // Ensure correct path
 app.use('/uploads', express.static(uploadsPath));
-console.log(`Uploads folder served from: ${uploadsPath}`);
 
 // Database connection
 connectDB();

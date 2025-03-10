@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import SocialFooter from '../SocialFooter';
+import './events.css'
 
 const Social = () => {
   const [events, setEvents] = useState({ upcoming: [], past: [] });
@@ -101,7 +102,8 @@ const Social = () => {
             <p>
               <strong>Description:</strong> {event.description}
             </p>
-            {event.registrationLink && (
+            
+          {events.upcoming.some(upcomingEvent => upcomingEvent._id === event._id)&&event.registrationLink && (
               <a href={event.registrationLink}
                 target="_blank"
                 rel="noopener noreferrer"

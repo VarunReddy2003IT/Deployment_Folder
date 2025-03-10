@@ -11,6 +11,7 @@ const Registers = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const userRole = localStorage.getItem('userRole');
   const userClub = localStorage.getItem('userClub');
+  const [actionLoading, setActionLoading] = useState(null); // Track which profile is being updated
 
   useEffect(() => {
     if (eventId) {
@@ -37,7 +38,7 @@ const Registers = () => {
 
       setEvent(eventData);
 
-      // Fetch registered profiles
+      // Fetch registered profiles - backend now returns profiles with participation status
       const profilesResponse = await axios.get(
         `http://localhost:5000/api/events/registered-profiles/${eventId}`
       );
@@ -46,6 +47,57 @@ const Registers = () => {
       setError(err.message || 'Failed to fetch profiles');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const markAsParticipated = async (email) => {
+    try {
+      if (!event) return;
+      setActionLoading(email);
+      
+      const eventDetails = `${event.eventname}-${event.club}`;
+      
+      const response = await axios.post(`http://localhost:5000/api/events/mark-participation/${eventId}`, {
+        userEmail: email,
+        participated: true,
+        eventDetails: eventDetails
+      });
+      
+      if (response.data.success) {
+        // Update the local state
+        setProfiles(profiles.map(profile => 
+          profile.email === email 
+            ? { ...profile, participationStatus: 'participated' } 
+            : profile
+        ));
+      } else {
+        // If the backend indicates the update wasn't successful
+        console.warn("Backend reported no updates:", response.data);
+        alert(`Note: Profile was found in ${response.data.userFound} collection but participation may not have been recorded properly.`);
+      }
+    } catch (err) {
+      console.error("Failed to mark participation:", err);
+      alert(`Failed to mark participation: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  
+  const removeRegistration = async (email) => {
+    try {
+      setActionLoading(email);
+      await axios.post(`http://localhost:5000/api/events/remove-registration/${eventId}`, {
+        userEmail: email
+      });
+      
+      // Update the local state
+      setProfiles(profiles.filter(profile => profile.email !== email));
+    } catch (err) {
+      console.error("Failed to remove registration:", err);
+      alert(`Failed to remove registration: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -164,6 +216,95 @@ const Registers = () => {
 
             <div>
               <strong>ID: </strong>{profile.collegeId}
+            </div>
+
+            <div style={{ 
+              display: 'flex', 
+              gap: '10px', 
+              marginTop: '10px', 
+              justifyContent: 'center',
+              flexWrap: 'wrap' 
+            }}>
+              {actionLoading === profile.email ? (
+                <div style={{ 
+                  padding: '8px 15px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}>
+                  Processing...
+                </div>
+              ) : (
+                <>
+                  {profile.participationStatus !== 'participated' && profile.participationStatus !== 'not-participated' && (
+                    <>
+                      <button
+                        onClick={() => markAsParticipated(profile.email)}
+                        style={{
+                          backgroundColor: '#28a745',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '8px 15px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '14px',
+                        }}
+                      >
+                        Participated
+                      </button>
+                    </>
+                  )}
+
+                  {profile.participationStatus === 'participated' && (
+                    <div style={{ 
+                      backgroundColor: '#e8f5e9', 
+                      borderRadius: '4px', 
+                      padding: '8px 15px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}>
+                      <span style={{ color: '#28a745', fontWeight: 'bold' }}>✓</span>
+                      <span>Participated</span>
+                    </div>
+                  )}
+
+                  {profile.participationStatus === 'not-participated' && (
+                    <div style={{ 
+                      backgroundColor: '#ffebee', 
+                      borderRadius: '4px', 
+                      padding: '8px 15px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}>
+                      <span style={{ color: '#dc3545', fontWeight: 'bold' }}>✕</span>
+                      <span>Not Participated</span>
+                    </div>
+                  )}
+
+                  {profile.participationStatus !== 'participated' && (
+                    <button
+                      onClick={() => removeRegistration(profile.email)}
+                      style={{
+                        backgroundColor: '#6c757d',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '8px 15px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         ))}

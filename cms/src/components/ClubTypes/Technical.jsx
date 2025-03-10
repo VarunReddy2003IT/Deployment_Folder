@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Footerbar from '../TechnicalFootBar';
+import './events.css'
 
 const Technical = () => {
   const [events, setEvents] = useState({ upcoming: [], past: [] });
@@ -104,7 +105,7 @@ const Technical = () => {
           <p>
             <strong>Description:</strong> {event.description}
           </p>
-          {event.registrationLink && (
+          {events.upcoming.some(upcomingEvent => upcomingEvent._id === event._id)&&event.registrationLink && (
             <a href={event.registrationLink} target="_blank" rel="noopener noreferrer" className="registration-link">
               Register Now
             </a>
