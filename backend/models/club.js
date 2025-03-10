@@ -31,4 +31,10 @@ const clubSchema = new mongoose.Schema({
   }
 });
 
-module.exports = mongoose.model('Admin', adminSchema,'Admin');
+// Update the updatedAt timestamp before saving
+clubSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
+
+module.exports = mongoose.model('Club', clubSchema);

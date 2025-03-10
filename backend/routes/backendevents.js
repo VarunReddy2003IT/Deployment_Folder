@@ -1,8 +1,24 @@
 const express = require('express');
+const multer = require('multer');
+const path = require('path');
 const router = express.Router();
 const Event = require('../models/events');
 const Member = require('../models/member');
 const Lead = require('../models/lead');
+
+// Set up storage for uploaded images
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/'); // folder to store uploaded images
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname)); // e.g., 1617404742289-504525434.png
+  }
+});
+
+// Create upload instance
+const upload = multer({ storage: storage }).single('image'); // Only allows single file uploads for image
 
 router.patch('/update/:eventId', async (req, res) => {
   try {
@@ -36,6 +52,7 @@ router.patch('/update/:eventId', async (req, res) => {
     res.status(500).json({ error: 'Failed to update event date' });
   }
 });
+
 // Fetch all events sorted by date
 router.get('/', async (req, res) => {
   try {
@@ -48,13 +65,12 @@ router.get('/', async (req, res) => {
 });
 
 // Create a new event
-router.post('/add', async (req, res) => {
+router.post('/add', upload, async (req, res) => {
   try {
     const { 
       eventname, 
       clubtype, 
       club, 
-      image, 
       date, 
       description
     } = req.body;
@@ -83,7 +99,7 @@ router.post('/add', async (req, res) => {
       eventname,
       clubtype,
       club,
-      image: image || '',
+      image: req.file ? `/${req.file.path}` : '', // Adjust path for image
       date,
       description,
       type,
@@ -397,5 +413,8 @@ router.post('/remove-registration/:eventId', async (req, res) => {
     res.status(500).json({ error: 'Failed to remove registration' });
   }
 });
+
+// Serve static files for uploaded images
+router.use('/uploads', express.static('uploads'));
 
 module.exports = router;
