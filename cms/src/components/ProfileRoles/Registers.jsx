@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 const Registers = () => {
   const { eventId } = useParams();
@@ -18,6 +20,36 @@ const Registers = () => {
       fetchEventAndProfiles();
     }
   }, [eventId]);
+  
+
+// Function to download registered profiles as an Excel file
+const downloadExcel = () => {
+  if (profiles.length === 0) {
+    alert("No data available to download.");
+    return;
+  }
+
+  // Define data structure for Excel
+  const worksheetData = profiles.map((profile, index) => ({
+    "S.No": index + 1,
+    Name: profile.name || "Not available",
+    Email: profile.email,
+    "Mobile Number": profile.mobilenumber || "Not provided",
+    "College ID": profile.collegeId || "N/A",
+    "Participation Status": profile.participationStatus || "Not recorded",
+  }));
+
+  // Create worksheet and workbook
+  const ws = XLSX.utils.json_to_sheet(worksheetData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Registered Profiles");
+
+  // Generate Excel file and trigger download
+  const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const data = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" });
+  saveAs(data, `Registered_Profiles_${event?.eventname || "Event"}.xlsx`);
+};
+
 
   const fetchEventAndProfiles = async () => {
     try {
@@ -152,6 +184,24 @@ const Registers = () => {
           }}
         />
       </div>
+      <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+        <button 
+          onClick={downloadExcel}
+          style={{
+            backgroundColor: '#007bff',
+            color: 'white',
+            padding: '10px 20px',
+            borderRadius: '5px',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: 'bold'
+          }}
+        >
+          📥 Download Excel
+        </button>
+      </div>
+
 
       <div style={{
         display: 'grid',

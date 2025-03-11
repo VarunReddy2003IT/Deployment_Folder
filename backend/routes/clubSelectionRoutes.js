@@ -225,12 +225,12 @@ router.get('/approve/:token/:approved', async (req, res) => {
     // Process approval
     if (isApproved) {
       // Check if club already exists in selectedClubs
-      if (!user.selectedClubs) {
-        user.selectedClubs = [];
+      if (!user.SelectedClubs) {
+        user.SelectedClubs = [];
       }
 
-      if (!user.selectedClubs.includes(club)) {
-        user.selectedClubs.push(club);
+      if (!user.SelectedClubs.includes(club)) {
+        user.SelectedClubs.push(club);
       }
 
       // Send approval email

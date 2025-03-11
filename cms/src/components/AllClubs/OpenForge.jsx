@@ -307,7 +307,7 @@ const fetchFacultyClubs = async (email) => {
     const isExpanded = expandedEventId === event._id;
     const canViewProfiles = userRole === 'admin' || (userRole === 'lead' && userClub === event.club)||isLeadForOpenForge;
     const isUpcoming = new Date(event.date) >= new Date();
-    const canUploadDocument = !isUpcoming && (userRole === 'admin' || (userRole === 'lead' && userClub === event.club))||isLeadForOpenForge;
+    const canUploadDocument = !isUpcoming && (userRole === 'admin' || (userRole === 'lead' && userClub === event.club)||isLeadForOpenForge);
     
     return (
       <div key={event._id} className={`event-card ${isExpanded ? 'expanded' : ''}`}>
