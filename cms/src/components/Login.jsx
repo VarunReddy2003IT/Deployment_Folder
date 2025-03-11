@@ -113,6 +113,7 @@ function Login() {
           <option value="admin">Admin</option>
           <option value="lead">Lead</option>
           <option value="member">Member</option>
+          <option value="faculty">Faculty</option>
         </select>
 
         {/* Conditionally render the Club dropdown for leads */}

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Member = require('../models/member');
 const Lead = require('../models/lead');
+const Faculty = require('../models/faculty');
+const Admin = require('../models/admin');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
@@ -9,11 +11,10 @@ const crypto = require('crypto');
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'varunreddy2new@gmail.com',
-    pass: 'bmly geoo gwkg jasu'
+    user: 'gvpclubconnect@gmail.com',
+    pass: 'dajl xekp dkda glda' // Consider using environment variables for sensitive information
   }
 });
-
 
 // Store pending approvals in memory (consider using Redis in production)
 const pendingApprovals = new Map();
@@ -27,7 +28,7 @@ const generateApprovalToken = () => {
 const cleanupPendingApprovals = () => {
   const EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000; // 7 days
   const now = Date.now();
-  
+
   for (const [token, data] of pendingApprovals.entries()) {
     if (now - data.timestamp > EXPIRY_TIME) {
       pendingApprovals.delete(token);
@@ -51,10 +52,10 @@ router.post('/select-clubs', async (req, res) => {
       });
     }
 
-    if (!role || !['member', 'lead'].includes(role)) {
+    if (!role || !['member', 'lead', 'faculty'].includes(role)) {
       return res.status(400).json({
         success: false,
-        message: 'Valid role (member or lead) is required'
+        message: 'Valid role (member, lead, or faculty) is required'
       });
     }
 
@@ -68,16 +69,19 @@ router.post('/select-clubs', async (req, res) => {
     // Find user based on role
     let user;
     try {
-      if (role === 'member') {
-        user = await Member.findOne({ email }).exec();
+      if (role === 'faculty') {
+        user = await Faculty.findOne({ email }).exec();
       } else {
-        user = await Lead.findOne({ email }).exec();
+        return res.status(400).json({
+          success: false,
+          message: 'Only faculty can request to join a club'
+        });
       }
 
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: `${role} not found with email ${email}`
+          message: `Faculty not found with email ${email}`
         });
       }
     } catch (dbError) {
@@ -88,47 +92,13 @@ router.post('/select-clubs', async (req, res) => {
       });
     }
 
-    // Initialize arrays if they don't exist
-    user.selectedClubs = user.selectedClubs || [];
-    user.pendingClubs = user.pendingClubs || [];
-
     // Check for existing memberships
-    if (user.selectedClubs.includes(selectedClub)) {
+    if (user.selectedClubs && user.selectedClubs.includes(selectedClub)) {
       return res.status(400).json({
         success: false,
         message: 'Already a member of this club'
       });
     }
-
-    if (user.pendingClubs.includes(selectedClub)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Request already pending for this club'
-      });
-    }
-
-    // Add to pending clubs
-    try {
-      user.pendingClubs.push(selectedClub);
-      await user.save();
-    } catch (saveError) {
-      console.error('Save error:', saveError);
-      return res.status(500).json({
-        success: false,
-        message: 'Error saving club request'
-      });
-    }
-
-    // Find club leads
-    let clubLeads;
-    try {
-      clubLeads = await Lead.find({ club: selectedClub }).exec();
-    } catch (leadsError) {
-      console.error('Error finding club leads:', leadsError);
-      clubLeads = [];
-    }
-
-    const leadEmails = clubLeads.map(lead => lead.email);
 
     // Generate approval token and save request
     const approvalToken = generateApprovalToken();
@@ -139,38 +109,51 @@ router.post('/select-clubs', async (req, res) => {
       timestamp: Date.now()
     });
 
-    // Send email to club leads if any exist
-    if (leadEmails.length > 0) {
+    // Find admins
+    let adminEmails;
+    try {
+      adminEmails = await Admin.find({}).select('email').exec();
+    } catch (adminError) {
+      console.error('Error finding admin emails:', adminError);
+      return res.status(500).json({
+        success: false,
+        message: 'Error fetching admin information'
+      });
+    }
+
+    const emailList = adminEmails.map(admin => admin.email);
+    
+    // Send email to admins if any exist
+    if (emailList.length > 0) {
       try {
         await transporter.sendMail({
-          from: 'varunreddy2new@gmail.com',
-          to: leadEmails,
-          subject: `New ${role} Request for ${selectedClub}`,
+          from: 'gvpclubconnect@gmail.com',
+          to: emailList,
+          subject: `New Faculty Request for ${selectedClub}`,
           html: `
             <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; border-radius: 10px;">
               <h2 style="color: #2c3e50; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px;">
-                New ${role} Request
+                New Faculty Request
               </h2>
               
               <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 <h3 style="color: #34495e; margin-bottom: 15px;">User Details:</h3>
                 <p style="margin: 5px 0;"><strong>Name:</strong> ${user.name}</p>
                 <p style="margin: 5px 0;"><strong>Email:</strong> ${email}</p>
-                ${role === 'member' ? `<p style="margin: 5px 0;"><strong>College ID:</strong> ${user.collegeId}</p>` : ''}
               </div>
               
               <div style="text-align: center; margin: 30px 0;">
                 <p style="color: #666; margin-bottom: 20px;">
-                  This user has requested to join <strong>${selectedClub}</strong>.
+                  This faculty member has requested to join <strong>${selectedClub}</strong>.
                 </p>
                 
                 <div style="margin: 20px 0;">
-                  <a href="https://finalbackend-8.onrender.com/api/club-selection/approve/${approvalToken}/true" 
+                  <a href="http://localhost:5000/api/club-selection/approve/${approvalToken}/true" 
                     style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 0 10px; display: inline-block;">
                     Approve
                   </a>
                   
-                  <a href="https://finalbackend-8.onrender.com/api/club-selection/approve/${approvalToken}/false" 
+                  <a href="http://localhost:5000/api/club-selection/approve/${approvalToken}/false" 
                     style="background-color: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 0 10px; display: inline-block;">
                     Reject
                   </a>
@@ -187,11 +170,11 @@ router.post('/select-clubs', async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: leadEmails.length > 0 
-        ? 'Club request submitted successfully and club leads have been notified'
-        : 'Club request submitted successfully, but no club leads are currently available'
+      message: emailList.length > 0 
+        ? 'Club request submitted successfully and admins have been notified'
+        : 'Club request submitted successfully, but no admins are currently available'
     });
-
+    
   } catch (error) {
     console.error('Club selection error:', error);
     return res.status(500).json({
@@ -218,15 +201,13 @@ router.get('/approve/:token/:approved', async (req, res) => {
     }
 
     const { email, role, club } = pendingApprovals.get(token);
-    pendingApprovals.delete(token);
+    pendingApprovals.delete(token); // Remove from pending approvals
 
     // Find user
     let user;
     try {
-      if (role === 'member') {
-        user = await Member.findOne({ email }).exec();
-      } else {
-        user = await Lead.findOne({ email }).exec();
+      if (role === 'faculty') {
+        user = await Faculty.findOne({ email }).exec();
       }
 
       if (!user) {
@@ -241,31 +222,29 @@ router.get('/approve/:token/:approved', async (req, res) => {
       `);
     }
 
-    // Remove from pending clubs
-    user.pendingClubs = user.pendingClubs.filter(c => c !== club);
-
+    // Process approval
     if (isApproved) {
-      // Add to selected clubs
+      // Check if club already exists in selectedClubs
       if (!user.selectedClubs) {
         user.selectedClubs = [];
       }
-      user.selectedClubs.push(club);
+
+      if (!user.selectedClubs.includes(club)) {
+        user.selectedClubs.push(club);
+      }
 
       // Send approval email
       try {
         await transporter.sendMail({
-          from: 'varunreddy2new@gmail.com',
+          from: 'gvpclubconnect@gmail.com',
           to: email,
           subject: `${club} Club Request Approved!`,
           html: `
             <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; border-radius: 10px;">
               <h2 style="color: #2c3e50; text-align: center;">Congratulations!</h2>
               <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <p>Your request to join <strong>${club}</strong> as a ${role} has been approved.</p>
-                ${role === 'lead' ? 
-                  '<p>You now have access to lead features for this club.</p>' : 
-                  '<p>You can now participate in club activities and access club resources.</p>'
-                }
+                <p>Your request to join <strong>${club}</strong> has been approved.</p>
+                <p>You can now participate in club activities and access club resources.</p>
               </div>
             </div>
           `
@@ -277,14 +256,14 @@ router.get('/approve/:token/:approved', async (req, res) => {
       // Send rejection email
       try {
         await transporter.sendMail({
-          from: 'varunreddy2new@gmail.com',
+          from: 'gvpclubconnect@gmail.com',
           to: email,
           subject: `Update on ${club} Club Request`,
           html: `
             <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; border-radius: 10px;">
               <h2 style="color: #2c3e50; text-align: center;">Club Request Update</h2>
               <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <p>We regret to inform you that your request to join <strong>${club}</strong> as a ${role} was not approved at this time.</p>
+                <p>We regret to inform you that your request to join <strong>${club}</strong> was not approved at this time.</p>
                 <p>You may apply again in the future or consider joining other clubs.</p>
               </div>
             </div>
@@ -349,6 +328,8 @@ router.get('/selected-clubs/:email/:role', async (req, res) => {
         user = await Member.findOne({ email }).exec();
       } else if (role === 'lead') {
         user = await Lead.findOne({ email }).exec();
+      } else if (role === 'faculty') {
+        user = await Faculty.findOne({ email }).exec();
       } else {
         return res.status(400).json({
           success: false,
@@ -373,7 +354,8 @@ router.get('/selected-clubs/:email/:role', async (req, res) => {
     return res.status(200).json({
       success: true,
       selectedClubs: user.selectedClubs || [],
-      pendingClubs: user.pendingClubs || []
+      // Since we now save directly to selectedClubs, we no longer track pending clubs.
+      pendingClubs: [] 
     });
 
   } catch (error) {

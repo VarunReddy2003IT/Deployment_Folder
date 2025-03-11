@@ -7,7 +7,8 @@ const signupRequestSchema = new mongoose.Schema({
   mobilenumber: { type: String, required: true },
   password: { type: String, required: true },
   role: { type: String, required: true },
-  club: { type: String, required: function() { return this.role === 'lead'; } } // Required only for leads
+  club: { type: String, required: function() { return this.role === 'lead'; } } ,// Required only for leads
+  clubs: { type: [String], required: function() { return this.role === 'faculty'; } }
 });
 
 module.exports = mongoose.model('SignupRequest', signupRequestSchema);

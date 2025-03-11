@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { FaEye, FaEyeSlash } from 'react-icons/fa'; // Import eye icons
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import './Signup.css';
 
 function Signup() {
@@ -12,12 +12,14 @@ function Signup() {
     password: '',
     role: 'member',
     club: '',
+    clubs: [], // For faculty role
   });
   const [otp, setOtp] = useState('');
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // Password visibility state
+  const [showPassword, setShowPassword] = useState(false);
 
   const clubs = [
     'YES', 'NSS1', 'NSS2', 'YouthForSeva', 'YFS', 'WeAreForHelp', 'HOH', 'Vidyadaan', 'Rotract',
@@ -27,6 +29,17 @@ function Signup() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleClubCheckboxChange = (e) => {
+    const { value, checked } = e.target;
+    setFormData(prev => {
+      if (checked) {
+        return { ...prev, clubs: [...prev.clubs, value] };
+      } else {
+        return { ...prev, clubs: prev.clubs.filter(club => club !== value) };
+      }
+    });
   };
 
   const validateForm = () => {
@@ -59,6 +72,11 @@ function Signup() {
       return false;
     }
 
+    if (formData.role === 'faculty' && formData.clubs.length === 0) {
+      setError('Please select at least one club if you are signing up as Faculty');
+      return false;
+    }
+
     return true;
   };
 
@@ -83,6 +101,23 @@ function Signup() {
     }
   };
 
+  const handleResendOtp = async () => {
+    setResendLoading(true);
+    setError('');
+
+    try {
+      const response = await axios.post('http://localhost:5000/api/signup/send-otp', {
+        email: formData.email
+      });
+      
+      alert(response.data.message);
+    } catch (error) {
+      setError(error.response?.data.message || 'Failed to resend OTP. Please try again.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   const handleVerifyAndSignup = async (e) => {
     e.preventDefault();
     if (!otp) {
@@ -94,12 +129,20 @@ function Signup() {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:5000/api/signup/verify', {
-        ...formData,
-        otp,
-        mobilenumber: formData.mobilenumber,
-        club: formData.role === 'lead' ? formData.club : undefined
-      });
+      let signupData = { ...formData, otp };
+
+      // Prepare data based on role
+      if (formData.role === 'lead') {
+        signupData.clubs = undefined; // No clubs array for lead
+      } else if (formData.role === 'faculty') {
+        signupData.club = undefined; // No single club for faculty
+      } else {
+        // For member or admin
+        signupData.club = undefined;
+        signupData.clubs = undefined;
+      }
+
+      const response = await axios.post('http://localhost:5000/api/signup/verify', signupData);
 
       alert(response.data.message);
       // Reset form
@@ -110,7 +153,8 @@ function Signup() {
         mobilenumber: '',
         password: '',
         role: 'member',
-        club: ''
+        club: '',
+        clubs: []
       });
       setOtp('');
       setShowOtpInput(false);
@@ -188,6 +232,7 @@ function Signup() {
           disabled={loading || showOtpInput}
         >
           <option value="admin">Admin</option>
+          <option value="faculty">Faculty</option> {/* New role */}
           <option value="lead">Lead</option>
           <option value="member">Member</option>
         </select>
@@ -208,14 +253,45 @@ function Signup() {
           </select>
         )}
 
+        {formData.role === 'faculty' && (
+          <div className="clubs-checkbox-container">
+            <p className="checkbox-label">Select Clubs (Choose at least one):</p>
+            <div className="clubs-grid">
+              {clubs.map((clubName) => (
+                <div key={clubName} className="club-checkbox">
+                  <input
+                    type="checkbox"
+                    id={`club-${clubName}`}
+                    value={clubName}
+                    checked={formData.clubs.includes(clubName)}
+                    onChange={handleClubCheckboxChange}
+                    disabled={loading || showOtpInput}
+                  />
+                  <label htmlFor={`club-${clubName}`}>{clubName}</label>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {showOtpInput && (
-          <input
-            type="text"
-            value={otp}
-            onChange={(e) => setOtp(e.target.value)}
-            placeholder="Enter OTP"
-            disabled={loading}
-          />
+          <div className="otp-container">
+            <input
+              type="text"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              placeholder="Enter OTP"
+              disabled={loading}
+            />
+            <button 
+              type="button" 
+              className="resend-otp-btn" 
+              onClick={handleResendOtp}
+              disabled={resendLoading}
+            >
+              {resendLoading ? 'Resending...' : 'Resend OTP'}
+            </button>
+          </div>
         )}
 
         {error && <div className="error-message">{error}</div>}

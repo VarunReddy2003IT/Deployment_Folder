@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const Admin = require('../models/admin');
 const Lead = require('../models/lead');
+const Faculty = require('../models/faculty'); // Import the new Faculty model
 const Member = require('../models/member');
 const SignupRequest = require('../models/signuprequest');
 const nodemailer = require('nodemailer');
@@ -54,9 +55,10 @@ const checkExistingUser = async (email) => {
   const existingRequest = await SignupRequest.findOne({ email });
   const existingAdmin = await Admin.findOne({ email });
   const existingLead = await Lead.findOne({ email });
+  const existingFaculty = await Faculty.findOne({ email }); // Check in faculty collection
   const existingMember = await Member.findOne({ email });
   
-  return existingRequest || existingAdmin || existingLead || existingMember;
+  return existingRequest || existingAdmin || existingLead || existingFaculty || existingMember;
 };
 
 // Route to send OTP
@@ -118,7 +120,7 @@ router.post('/send-otp', async (req, res) => {
 // Route to verify OTP and complete signup
 router.post('/verify', async (req, res) => {
   try {
-    const { name, collegeId, email, mobilenumber, password, role, club, otp } = req.body;
+    const { name, collegeId, email, mobilenumber, password, role, club, clubs, otp } = req.body;
 
     console.log("Received Data:", req.body); // Debugging log
 
@@ -170,6 +172,12 @@ router.post('/verify', async (req, res) => {
       return res.status(400).json({ message: 'Invalid or missing club selection for lead role' });
     }
 
+    // Validate clubs for faculty role
+    if (role === 'faculty' && (!clubs || !Array.isArray(clubs) || clubs.length === 0 || 
+        !clubs.every(c => clubs.includes(c)))) {
+      return res.status(400).json({ message: 'Please select at least one valid club for faculty role' });
+    }
+
     // Check for existing user
     const existingUser = await checkExistingUser(email);
     if (existingUser) {
@@ -179,8 +187,8 @@ router.post('/verify', async (req, res) => {
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Handle admin and lead signups
-    if (role === 'admin' || role === 'lead') {
+    // Handle admin, faculty, and lead signups
+    if (role === 'admin' || role === 'lead' || role === 'faculty') {
       const newRequest = new SignupRequest({
         name,
         collegeId,
@@ -188,7 +196,8 @@ router.post('/verify', async (req, res) => {
         mobilenumber,
         role,
         password: hashedPassword,
-        club: role === 'lead' ? club : undefined
+        club: role === 'lead' ? club : undefined,
+        clubs: role === 'faculty' ? clubs : undefined
       });
 
       await newRequest.save();
@@ -201,12 +210,34 @@ router.post('/verify', async (req, res) => {
         return res.status(500).json({ message: 'No admins found in the system to approve your request' });
       }
 
+      // Customize email content based on role
+      let roleSpecificContent = '';
+      if (role === 'lead') {
+        roleSpecificContent = `<p><strong>Club:</strong> ${club}</p>`;
+      } else if (role === 'faculty') {
+        roleSpecificContent = `<p><strong>Clubs:</strong> ${clubs.join(', ')}</p>`;
+      }
+
       // Send email to admins
       await transporter.sendMail({
         from: 'gvpclubconnect@gmail.com',
         to: adminEmails,
         subject: `GVPCE Club Connect Signup Request for ${role}`,
-        html: `<div><h2>New Signup Request</h2><p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Mobile:</strong> ${mobilenumber}</p><p><strong>Role:</strong> ${role}</p>${role === 'lead' ? `<p><strong>Club:</strong> ${club}</p>` : ''}<p><strong>College ID:</strong> ${collegeId}</p><div><a href="https://finalbackend-8.onrender.com/api/signup/approve/${newRequest._id}">Approve</a><a href="https://finalbackend-8.onrender.com/api/signup/reject/${newRequest._id}">Reject</a></div></div>`
+        html: `
+          <div>
+            <h2>New Signup Request</h2>
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Mobile:</strong> ${mobilenumber}</p>
+            <p><strong>Role:</strong> ${role}</p>
+            ${roleSpecificContent}
+            <p><strong>College ID:</strong> ${collegeId}</p>
+            <div>
+              <a href="http://localhost:5000/api/signup/approve/${newRequest._id}">Approve</a>
+              <a href="http://localhost:5000/api/signup/reject/${newRequest._id}">Reject</a>
+            </div>
+          </div>
+        `
       });
 
       return res.status(200).json({ message: `${role} signup request submitted successfully. Please wait for admin approval.` });
@@ -258,6 +289,8 @@ router.get('/approve/:id', async (req, res) => {
 
     if (signupRequest.role === 'lead') {
       userData.club = signupRequest.club;
+    } else if (signupRequest.role === 'faculty') {
+      userData.clubs = signupRequest.clubs;
     }
 
     if (signupRequest.role === 'admin') {
@@ -272,6 +305,20 @@ router.get('/approve/:id', async (req, res) => {
         { $set: userData },
         { new: true, upsert: true }
       );
+    } else if (signupRequest.role === 'faculty') {
+      user = await Faculty.findOneAndUpdate(
+        { email: signupRequest.email },
+        { $set: userData },
+        { new: true, upsert: true }
+      );
+    }
+
+    // Create role-specific email content
+    let roleSpecificContent = '';
+    if (signupRequest.role === 'lead') {
+      roleSpecificContent = `<p>Club: ${signupRequest.club}</p>`;
+    } else if (signupRequest.role === 'faculty') {
+      roleSpecificContent = `<p>Clubs: ${signupRequest.clubs.join(', ')}</p>`;
     }
 
     // Send approval email
@@ -285,7 +332,7 @@ router.get('/approve/:id', async (req, res) => {
           <p>Dear ${signupRequest.name},</p>
           <p>Your account request has been approved. You can now log in to access the platform.</p>
           <p>Role: ${signupRequest.role}</p>
-          ${signupRequest.role === 'lead' ? `<p>Club: ${signupRequest.club}</p>` : ''}
+          ${roleSpecificContent}
         </div>
       `
     };
@@ -301,6 +348,9 @@ router.get('/approve/:id', async (req, res) => {
     res.status(500).json({ message: 'Error approving signup request' });
   }
 });
+
+// No changes needed for reject, pending, check-exists, and resend-otp routes
+// ... (rest of the code remains unchanged)
 
 // Route to reject a signup request
 router.get('/reject/:id', async (req, res) => {

@@ -3,8 +3,31 @@ const bcrypt = require('bcryptjs');
 const Admin = require('../models/admin');
 const Lead = require('../models/lead');
 const Member = require('../models/member');
+const Faculty = require('../models/faculty');
 
 const router = express.Router();
+router.post('/clubs', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const facultyMember = await Faculty.findOne({ email }).populate('SelectedClubs');
+
+    if (!facultyMember) {
+      return res.status(404).json({ message: 'Faculty not found' });
+    }
+
+    console.log("Selected Clubs:", facultyMember.SelectedClubs);
+    res.status(200).json(facultyMember.SelectedClubs);
+  } catch (err) {
+    console.error('Error fetching faculty clubs:', err);
+    res.status(500).json({ message: 'Failed to fetch faculty clubs', error: err.message });
+  }
+});
+
 
 router.post('/', async (req, res) => {
   const { email, password, role, club } = req.body;
@@ -20,6 +43,8 @@ router.post('/', async (req, res) => {
     userModel = Lead;
   } else if (role === 'member') {
     userModel = Member;
+  }else if (role === 'faculty') {
+    userModel = Faculty;
   } else {
     return res.status(400).json({ message: 'Invalid role' });
   }
@@ -42,8 +67,8 @@ router.post('/', async (req, res) => {
       }
 
       // Ensure the lead's selected club list is updated
-      if (!user.selectedClubs.includes(club)) {
-        user.selectedClubs.push(club);
+      if (!user.SelectedClubs.includes(club)) {
+        user.SelectedClubs.push(club);
         await user.save();
       }
     }
@@ -57,7 +82,7 @@ router.post('/', async (req, res) => {
         imageUrl: user.imageUrl,
         ...(role === 'lead' && {
           collegeId: user.collegeId,
-          selectedClubs: user.selectedClubs,
+          SelectedClubs: user.SelectedClubs,
           pendingClubs: user.pendingClubs
         }),
       },

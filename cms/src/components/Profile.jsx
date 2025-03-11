@@ -14,8 +14,6 @@ const Profile = () => {
   const [deleteOTP, setDeleteOTP] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [deletionError, setDeletionError] = useState(null);
-  
-  // New state variables for editing
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [editedLocation, setEditedLocation] = useState('');
@@ -55,7 +53,7 @@ const Profile = () => {
         setEditedName(result.data.name || '');
         setEditedLocation(result.data.location || '');
 
-        if (role === 'member' || role === 'lead') {
+        if (role === 'member' || role === 'lead' || role === 'faculty') {
           const clubsResponse = await fetch(`http://localhost:5000/api/club-selection/selected-clubs/${email}/${role}`);
           const clubsData = await clubsResponse.json();
           
@@ -85,8 +83,7 @@ const Profile = () => {
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('email', email); // Send email for user identification
-    formData.append('role', role); // Send role to identify user type
+    formData.append('email', email);
 
     try {
       const uploadResponse = await fetch('http://localhost:5000/api/profile/upload-image', {
@@ -135,19 +132,18 @@ const Profile = () => {
             throw new Error(result.message || 'Failed to update profile');
         }
 
-        // Correctly update local user data
         setUserData(prev => ({
             ...prev,
             name: result.data.name,
             location: result.data.location || 'Not available',
         }));
-        
-        setIsEditing(false); // Stop editing mode
+
+        setIsEditing(false);
         showNotification('Profile updated successfully');
     } catch (err) {
         showNotification(err.message || 'Error updating profile', 'error');
     }
-};
+  };
 
   const handleCancelEdit = () => {
     setEditedName(userData?.name || '');
@@ -268,7 +264,7 @@ const Profile = () => {
   return (
     <div className="profile-container">
       {notification && (
-        <div className="notification">
+        <div className={`notification ${notification.type}`}>
           {notification.message}
         </div>
       )}
@@ -342,7 +338,45 @@ const Profile = () => {
               <label>Role:</label>
               <div>{role}</div>
             </div>
-
+            {(role === 'faculty') && (
+                <div className="profile-detail">
+                    <label>Clubs:</label>
+                    <div>
+                        {Array.isArray(userData?.SelectedClubs) && userData.SelectedClubs.length > 0 ? (
+                            userData.SelectedClubs.map((club, index) => (
+                                <div key={index} className="club-item">
+                                    {club}
+                                </div>
+                            ))
+                        ) : (
+                            'Not available'
+                        )}
+                    </div>
+                    {/* Add Club Selection */}
+                    <div className="club-selection-form">
+                      <select
+                        value={selectedClub}
+                        onChange={(e) => setSelectedClub(e.target.value)}
+                        className="club-select"
+                        style={{ width: "250px", padding: "8px", fontSize: "16px" }}
+                      >
+                        <option value="">Select a club to join</option>
+                        {clubs
+                          .filter(club => !userData?.SelectedClubs.includes(club) && !pendingClubs.includes(club))
+                          .map((club, index) => (
+                            <option key={index} value={club}>{club}</option>
+                          ))}
+                      </select>
+                      <button
+                        onClick={handleClubSelection}
+                        disabled={!selectedClub}
+                        className={`club-select-button ${!selectedClub ? 'disabled' : ''}`}
+                      >
+                        Request to Join
+                      </button>
+                    </div>
+                </div>
+            )}
             <div className="profile-detail">
               <label>Location:</label>
               <div>{userData?.location || 'Not available'}</div>
@@ -384,7 +418,7 @@ const Profile = () => {
                 placeholder="Enter your location"
               />
             </div>
-            
+
             <div className="edit-buttons">
               <button onClick={handleSaveProfile} className="save-button">
                 Save Changes
@@ -397,7 +431,7 @@ const Profile = () => {
         )}
       </div>
 
-      {/* Club Selection for Members and Leads */}
+      {/* Club Selection for Members, Leads, and Faculty */}
       {(role === 'member' || role === 'lead') && (
         <div className="club-selection-container">
           <h3 className="section-title">Club Selection</h3>
@@ -463,7 +497,7 @@ const Profile = () => {
       )}
 
       {/* Delete Account Section */}
-      <div className="delete-account-section">
+      <div className="delete-account-section">  
         <h3 className="section-title">Delete Account</h3>
         <p className="warning-text">
           Warning: This action cannot be undone. All your data will be permanently deleted.
@@ -534,7 +568,7 @@ const Profile = () => {
         )}
       </div>
 
-      {/* Admin/Lead Links */}
+      {/* Admin/Lead/Faculty Links */}
       {role === 'admin' && (
         <Link
           to="/admin-profile"
@@ -581,9 +615,35 @@ const Profile = () => {
           background-color: white;
         }
 
+        /* Additional styles for the new club selection form */
+        .club-selection-form {
+          display: flex;
+          gap: 10px;
+          margin-top: 15px;
+        }.profile-container {
+          max-width: 600px;
+          margin: 20px auto;
+          padding: 20px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          border-radius: 8px;
+          background-color: white;
+        }
+
         .profile-image-container {
           position: relative;
           display: inline-block;
+        }
+
+        .no-image {
+          width: 120px;
+          height: 120px;
+          border-radius: 50%;
+          background-color: #e9ecef;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          color: #6c757d;
+          font-size: 0.9rem;
         }
 
         .change-photo-button {
@@ -845,6 +905,39 @@ const Profile = () => {
         .error-message {
           color: #d32f2f;
           margin-top: 10px;
+        }
+
+        .notification {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          padding: 15px;
+          border-radius: 5px;
+          z-index: 1000;
+          animation: fadeIn 0.3s, fadeOut 0.3s 4.7s;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .notification.success {
+          background-color: #d4edda;
+          color: #155724;
+          border: 1px solid #c3e6cb;
+        }
+
+        .notification.error {
+          background-color: #f8d7da;
+          color: #721c24;
+          border: 1px solid #f5c6cb;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+          from { opacity: 1; }
+          to { opacity: 0; }
         }
       `}</style>
     </div>

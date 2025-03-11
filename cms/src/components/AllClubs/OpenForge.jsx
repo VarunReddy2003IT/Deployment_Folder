@@ -37,13 +37,54 @@ function OpenForge() {
   const userRole = localStorage.getItem("userRole");
   const userClub = localStorage.getItem("userClub");
 
-  useEffect(() => {
-    if ((userRole === 'lead' && userClub === 'OpenForge') || userRole === 'admin') {
+  // New state for faculty selected clubs
+  const [facultySelectedClubs, setFacultySelectedClubs] = useState([]);
+
+useEffect(() => {
+  // Fetch faculty clubs if the user is a faculty member
+  const fetchClubDataAndEvents = async () => {
+    if (userRole === "faculty") {
+      const selectedClubs = await fetchFacultyClubs(userEmail); // Now returns the list
+      console.log("Selected Clubs:", selectedClubs); // Debugging log
+
+      if (selectedClubs.includes("OpenForge")) {
+        setIsLeadForOpenForge(true);
+      }
+    } else if (
+      (userRole === "lead" && userClub === "OpenForge") ||
+      userRole === "admin"
+    ) {
       setIsLeadForOpenForge(true);
     }
-    fetchEvents();
-    fetchClubData();
-  }, [userRole, userClub]);
+
+    // Fetch events and club data
+    await fetchEvents();
+    await fetchClubData();
+  };
+
+  // Invoke the function
+  fetchClubDataAndEvents();
+}, [userRole, userClub, userEmail]);
+
+const fetchFacultyClubs = async (email) => {
+  try {
+    const response = await axios.post(
+      "http://localhost:5000/api/fetching/faculty/clubs",
+      { email }
+    );
+    const selectedClubs = Array.isArray(response.data) ? response.data : [];
+
+    console.log("Faculty Selected Clubs:", selectedClubs); // Debugging log
+    setFacultySelectedClubs(selectedClubs);
+
+    return selectedClubs; // Returning clubs to be used in useEffect
+  } catch (error) {
+    console.error("Failed to fetch faculty selected clubs:", error.message);
+    return [];
+  }
+};
+
+  
 
   const fetchClubData = async () => {
     try {

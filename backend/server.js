@@ -42,6 +42,7 @@ app.use((req, res, next) => {
 // Routes
 app.use('/api/events', require('./routes/backendevents'));
 app.use('/api/login', require('./routes/backendlogin'));
+app.use('/api/fetching/faculty', require('./routes/backendlogin'));
 app.use('/api/signup', require('./routes/backendsignup'));
 app.use('/api/profile', require('./routes/backendprofile'));
 app.use('/api/clubs', require('./routes/clubroute'));

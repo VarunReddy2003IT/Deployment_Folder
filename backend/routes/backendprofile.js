@@ -7,6 +7,7 @@ const fs = require('fs');
 const Admin = require('../models/admin');
 const Lead = require('../models/lead');
 const Member = require('../models/member');
+const Faculty = require('../models/faculty');
 
 // Store OTPs temporarily (consider using Redis or similar for production)
 const otpStore = new Map();
@@ -70,6 +71,8 @@ const getModel = (role) => {
             return Lead;
         case 'member':
             return Member;
+        case 'faculty':
+                return Faculty;    
         default:
             throw new Error('Invalid role provided');
     }
@@ -85,7 +88,15 @@ router.get('/', async (req, res) => {
 
     try {
         const Model = getModel(role);
-        const userData = await Model.findOne({ email: email.toLowerCase() }, { name: 1, email: 1, imageUrl: 1, location: 1 });
+        // Define the fields to retrieve based on role
+        const fields = { name: 1, email: 1, imageUrl: 1, location: 1 }; 
+        
+        // If the role is "faculty", include the clubs field
+        if (role.toLowerCase() === 'faculty') {
+            fields.SelectedClubs = 1; // include the clubs field
+        }
+
+        const userData = await Model.findOne({ email: email.toLowerCase() }, fields);
 
         if (!userData) {
             return res.status(404).json({ success: false, message: `User not found in ${role} database.` });
