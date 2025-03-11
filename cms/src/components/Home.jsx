@@ -182,7 +182,7 @@ function Home() {
   return (
     <div className="home-container">
       <section className="welcome-section">
-        <h2>Welcome to Gayatri Vidya Parishad College of Engineering</h2>
+        <h2><em>Welcome to GVP CLUB CONNECT</em></h2>
         <p>
           At Gayatri Vidya Parishad College of Engineering, we take pride in our vibrant and diverse club culture. With
           clubs spanning across Social, Cultural, Technical, and Coding, our college offers something for everyone.

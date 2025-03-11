@@ -32,7 +32,7 @@ const Registers = () => {
       }
 
       // Check if user has permission to view profiles
-      if (userRole !== 'admin' && (userRole !== 'lead' || userClub !== eventData.club)) {
+      if (userRole !== 'admin' && (userRole !== 'lead' || userClub !== eventData.club)&&userRole!=='faculty') {
         throw new Error('You do not have permission to view these profiles');
       }
 
@@ -109,7 +109,7 @@ const Registers = () => {
     );
   };
 
-  if (!userRole || (userRole !== 'admin' && userRole !== 'lead')) {
+  if (!userRole || (userRole !== 'admin' && userRole !== 'lead'&&userRole!=='faculty')) {
     return (
       <div style={{ padding: '20px' }}>
         <div style={{ textAlign: 'center' }}>

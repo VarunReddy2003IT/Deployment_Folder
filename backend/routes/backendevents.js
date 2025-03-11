@@ -5,6 +5,73 @@ const router = express.Router();
 const Event = require('../models/events');
 const Member = require('../models/member');
 const Lead = require('../models/lead');
+const Faculty = require('../models/faculty'); // Add faculty model import
+const nodemailer = require('nodemailer'); // Add nodemailer for email functionality
+
+// Configure nodemailer with your email service credentials
+const transporter = nodemailer.createTransport({
+  service: 'gmail', // or any other email service
+  auth: {
+    user: 'gvpclubconnect@gmail.com',
+    pass: 'dajl xekp dkda glda',
+  }
+});
+
+// Function to send email notification to faculty members
+async function notifyFacultyMembers(clubName, eventDetails) {
+  try {
+    // Find all faculty members who have selected this club
+    const facultyMembers = await Faculty.find({ SelectedClubs: clubName });
+    
+    if (facultyMembers.length === 0) {
+      console.log(`No faculty members found for club: ${clubName}`);
+      return;
+    }
+    
+    console.log(`Sending notifications to ${facultyMembers.length} faculty members`);
+    
+    // Format the date for better readability
+    const formattedDate = new Date(eventDetails.date).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    // Create email content
+    const emailSubject = `New Event: ${eventDetails.eventname} by ${clubName}`;
+    
+    // Send email to each faculty member
+    const emailPromises = facultyMembers.map(faculty => {
+      const emailBody = `
+        <h2>New Event Notification</h2>
+        <p>Dear ${faculty.name || 'Faculty Member'},</p>
+        <p>A new event has been added to the ${clubName} club that you're following:</p>
+        <div style="border-left: 4px solid #0078d4; padding-left: 15px; margin: 20px 0;">
+          <h3>${eventDetails.eventname}</h3>
+          <p><strong>Date:</strong> ${formattedDate}</p>
+          <p><strong>Description:</strong> ${eventDetails.description}</p>
+        </div>
+        <p>You can log in to the platform to view more details and track registrations.</p>
+        <p>Regards,<br>Clubs Management System</p>
+      `;
+      
+      return transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: faculty.email,
+        subject: emailSubject,
+        html: emailBody
+      });
+    });
+    
+    await Promise.all(emailPromises);
+    console.log(`Successfully sent notifications to faculty members for ${clubName}`);
+    
+  } catch (error) {
+    console.error('Error sending faculty notifications:', error);
+    // Don't throw the error - we don't want event creation to fail if notifications fail
+  }
+}
 
 // Set up storage for uploaded images
 const storage = multer.diskStorage({
@@ -52,6 +119,40 @@ router.patch('/update/:eventId', async (req, res) => {
     res.status(500).json({ error: 'Failed to update event date' });
   }
 });
+router.post('/upload-image', upload, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    // Get the file path
+    const filePath = `http://localhost:5000/${req.file.path}`.replace(/\\/g, '/');
+
+    // You can associate the image with a user if email is provided
+    const { email } = req.body;
+    if (email) {
+      console.log(`Image uploaded by user: ${email}`);
+      // Optionally store this information or associate with user
+    }
+
+    // Return the file path for client-side use
+    res.json({ 
+      message: 'Image uploaded successfully',
+      filePath: filePath 
+    });
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    
+    // If there was an error, attempt to remove the uploaded file
+    if (req.file && req.file.path) {
+      fs.unlink(req.file.path, (unlinkError) => {
+        if (unlinkError) console.error('Error removing failed upload:', unlinkError);
+      });
+    }
+    
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
 
 // Fetch all events sorted by date
 router.get('/', async (req, res) => {
@@ -71,14 +172,16 @@ router.post('/add', upload, async (req, res) => {
       eventname, 
       clubtype, 
       club, 
-      date, 
+      date,
+      image, 
       description
     } = req.body;
 
     console.log('Received event data:', {
       eventname, 
       clubtype, 
-      club, 
+      club,
+      image, 
       date
     });
 
@@ -99,7 +202,7 @@ router.post('/add', upload, async (req, res) => {
       eventname,
       clubtype,
       club,
-      image: req.file ? `/${req.file.path}` : '', // Adjust path for image
+      image,
       date,
       description,
       type,
@@ -108,6 +211,15 @@ router.post('/add', upload, async (req, res) => {
     });
 
     const savedEvent = await newEvent.save();
+    
+    // After successfully saving the event, notify relevant faculty members
+    await notifyFacultyMembers(club, {
+      eventname,
+      date,
+      description,
+      id: savedEvent._id
+    });
+    
     res.status(201).json(savedEvent);
   } catch (error) {
     console.error('Error creating event:', error);
@@ -415,6 +527,5 @@ router.post('/remove-registration/:eventId', async (req, res) => {
 });
 
 // Serve static files for uploaded images
-router.use('/uploads', express.static('uploads'));
 
 module.exports = router;

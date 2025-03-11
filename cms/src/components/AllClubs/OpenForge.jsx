@@ -13,7 +13,7 @@ function OpenForge() {
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [error, setError] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [image, setimage] = useState('');
   const [uploading, setUploading] = useState(false);
   const [events, setEvents] = useState({ upcoming: [], past: [] });
   const [loading, setLoading] = useState(true);
@@ -167,7 +167,8 @@ const fetchFacultyClubs = async (email) => {
       });
 
       if (response.data.filePath) {
-        setImageUrl(response.data.filePath);
+        setimage(response.data.filePath);
+        console.log(image);
       } else {
         throw new Error('Failed to upload image to server');
       }
@@ -221,7 +222,7 @@ const fetchFacultyClubs = async (email) => {
         club: "OpenForge",
         date: eventDate,
         description: eventDescription,
-        image: imageUrl,
+        image: image,
         registeredEmails: []
       });
 
@@ -229,7 +230,7 @@ const fetchFacultyClubs = async (email) => {
       setEventName('');
       setEventDate('');
       setEventDescription('');
-      setImageUrl('');
+      setimage('');
       setShowAddEventForm(false);
       setError('');
       fetchEvents();
@@ -304,9 +305,9 @@ const fetchFacultyClubs = async (email) => {
 
   const renderEventCard = (event) => {
     const isExpanded = expandedEventId === event._id;
-    const canViewProfiles = userRole === 'admin' || (userRole === 'lead' && userClub === event.club);
+    const canViewProfiles = userRole === 'admin' || (userRole === 'lead' && userClub === event.club)||isLeadForOpenForge;
     const isUpcoming = new Date(event.date) >= new Date();
-    const canUploadDocument = !isUpcoming && (userRole === 'admin' || (userRole === 'lead' && userClub === event.club));
+    const canUploadDocument = !isUpcoming && (userRole === 'admin' || (userRole === 'lead' && userClub === event.club))||isLeadForOpenForge;
     
     return (
       <div key={event._id} className={`event-card ${isExpanded ? 'expanded' : ''}`}>
@@ -647,9 +648,9 @@ const fetchFacultyClubs = async (email) => {
                           disabled={uploading}
                         />
                         {uploading && <p className="upload-status">Uploading...</p>}
-                        {imageUrl && (
+                        {image && (
                           <div className="image-preview">
-                            <img src={imageUrl} alt="Event poster preview" />
+                            <img src={image} alt="Event poster preview" />
                           </div>
                         )}
                       </div>

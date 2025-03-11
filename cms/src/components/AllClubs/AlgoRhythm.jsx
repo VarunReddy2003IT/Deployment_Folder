@@ -12,7 +12,7 @@ function AlgoRhythm() {
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [error, setError] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [image, setimage] = useState('');
   const [uploading, setUploading] = useState(false);
   const [events, setEvents] = useState({ upcoming: [], past: [] });
   const [loading, setLoading] = useState(true);
@@ -36,13 +36,54 @@ function AlgoRhythm() {
   const userRole = localStorage.getItem("userRole");
   const userClub = localStorage.getItem("userClub");
 
-  useEffect(() => {
-    if ((userRole === 'lead' && userClub === 'AlgoRhythm') || userRole === 'admin') {
+  // New state for faculty selected clubs
+  const [facultySelectedClubs, setFacultySelectedClubs] = useState([]);
+
+useEffect(() => {
+  // Fetch faculty clubs if the user is a faculty member
+  const fetchClubDataAndEvents = async () => {
+    if (userRole === "faculty") {
+      const selectedClubs = await fetchFacultyClubs(userEmail); // Now returns the list
+      console.log("Selected Clubs:", selectedClubs); // Debugging log
+
+      if (selectedClubs.includes("AlgoRhythm")) {
+        setIsLeadForAlgoRhythm(true);
+      }
+    } else if (
+      (userRole === "lead" && userClub === "AlgoRhythm") ||
+      userRole === "admin"
+    ) {
       setIsLeadForAlgoRhythm(true);
     }
-    fetchEvents();
-    fetchClubData();
-  }, [userRole, userClub]);
+
+    // Fetch events and club data
+    await fetchEvents();
+    await fetchClubData();
+  };
+
+  // Invoke the function
+  fetchClubDataAndEvents();
+}, [userRole, userClub, userEmail]);
+
+const fetchFacultyClubs = async (email) => {
+  try {
+    const response = await axios.post(
+      "http://localhost:5000/api/fetching/faculty/clubs",
+      { email }
+    );
+    const selectedClubs = Array.isArray(response.data) ? response.data : [];
+
+    console.log("Faculty Selected Clubs:", selectedClubs); // Debugging log
+    setFacultySelectedClubs(selectedClubs);
+
+    return selectedClubs; // Returning clubs to be used in useEffect
+  } catch (error) {
+    console.error("Failed to fetch faculty selected clubs:", error.message);
+    return [];
+  }
+};
+
+  
 
   const fetchClubData = async () => {
     try {
@@ -125,7 +166,8 @@ function AlgoRhythm() {
       });
 
       if (response.data.filePath) {
-        setImageUrl(response.data.filePath);
+        setimage(response.data.filePath);
+        console.log(image);
       } else {
         throw new Error('Failed to upload image to server');
       }
@@ -179,7 +221,7 @@ function AlgoRhythm() {
         club: "AlgoRhythm",
         date: eventDate,
         description: eventDescription,
-        image: imageUrl,
+        image: image,
         registeredEmails: []
       });
 
@@ -187,7 +229,7 @@ function AlgoRhythm() {
       setEventName('');
       setEventDate('');
       setEventDescription('');
-      setImageUrl('');
+      setimage('');
       setShowAddEventForm(false);
       setError('');
       fetchEvents();
@@ -605,9 +647,9 @@ function AlgoRhythm() {
                           disabled={uploading}
                         />
                         {uploading && <p className="upload-status">Uploading...</p>}
-                        {imageUrl && (
+                        {image && (
                           <div className="image-preview">
-                            <img src={imageUrl} alt="Event poster preview" />
+                            <img src={image} alt="Event poster preview" />
                           </div>
                         )}
                       </div>
